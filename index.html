@@ -133,7 +133,28 @@ mjx-container[display="true"]{overflow-x:auto;overflow-y:hidden;margin:6px 0 !im
 .screen canvas{display:block;width:100%;border-radius:6px}
 .scope-body{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-start}
 .scope-screen{flex:1 1 300px;min-width:240px;max-width:430px;margin:6px}
-.scope-ctl{display:grid;grid-template-columns:repeat(3,auto);gap:8px 12px;align-items:end}
+.lamp.off{background:radial-gradient(circle at 40% 35%,#8a5a4e,#4a1a10 70%);box-shadow:none}
+.lamp.g{background:radial-gradient(circle at 40% 35%,#d9ffc9,#3bd11d 60%,#0d5a05);box-shadow:0 0 7px #5aff32}
+.lamp.g.off{background:radial-gradient(circle at 40% 35%,#5e7a55,#1d3a14 70%);box-shadow:none}
+.tumb{width:24px;height:36px;border-radius:5px;border:1px solid #6f716b;background:radial-gradient(circle at 50% 50%,#9b9d97 0 5px,#d7d8d2 6px,#b8bab3);position:relative;cursor:pointer;padding:0;box-shadow:inset 0 1px 0 #fff,0 1px 2px rgba(0,0,0,.35)}
+.tumb::after{content:"";position:absolute;left:8px;width:6px;height:15px;border-radius:3px;background:linear-gradient(90deg,#8a8a86,#f6f6f2 45%,#8a8a86);box-shadow:0 1px 2px rgba(0,0,0,.5);bottom:17px;transition:bottom .12s}
+.tumb:not(.on)::after{bottom:3px}
+.kc{font-size:9.5px;text-transform:uppercase;letter-spacing:.5px;text-align:center;color:#26261f;line-height:1.15}
+.grp{border:1px solid #8b8e87;border-radius:5px;padding:9px 7px 6px;position:relative;margin-top:5px}
+.grp>i{position:absolute;top:-7px;left:8px;background:#c7c9c2;padding:0 4px;font:normal 9.5px Arial,sans-serif;text-transform:uppercase;letter-spacing:.6px;color:#2b2b26}
+.gk{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:flex-end;justify-content:center}
+.rbtns{display:flex;flex-direction:column;gap:2px}
+.rbtns.h{flex-direction:row;flex-wrap:wrap;justify-content:center}
+.rbtns .btn-sov{min-width:30px;padding:3px 5px}
+.unc{display:inline-flex;align-items:center;gap:3px;font-size:8.5px;text-transform:uppercase;color:#26261f}
+.unc .lamp{width:8px;height:8px}
+.gen-top{display:flex;gap:12px;align-items:center;justify-content:center;flex-wrap:wrap;margin:2px 0 10px}
+.dial-win{padding:4px;background:#2a2c29;border-radius:6px;box-shadow:inset 0 0 6px #000;flex:0 1 308px;min-width:0}
+.dial{display:block;width:100%;height:auto}
+.meter{display:block;width:140px;height:auto;box-shadow:inset 0 0 4px rgba(0,0,0,.4),0 0 0 3px #2a2c29;border-radius:4px}
+.gen-read.off{color:#3c4a36}
+.scope-under{display:flex;justify-content:center;margin-top:10px}
+.scope-ctl{display:flex;flex-wrap:wrap;gap:10px;align-items:stretch;flex:1 1 360px;min-width:0}
 .btn-sov{background:linear-gradient(#f4f4f0,#c8c9c3);border:1px solid #6f716b;border-radius:3px;font:10.5px Arial,sans-serif;padding:3px 7px;cursor:pointer;color:#111;
   box-shadow:inset 0 1px 0 #fff,0 1px 2px rgba(0,0,0,.35);text-transform:uppercase;letter-spacing:.3px}
 .btn-sov.on{background:linear-gradient(#a9aaa4,#d9dad4);box-shadow:inset 0 2px 3px rgba(0,0,0,.45)}
@@ -168,7 +189,6 @@ mjx-container[display="true"]{overflow-x:auto;overflow-y:hidden;margin:6px 0 !im
   main{padding:8px}
   .card{padding:10px}
   .th{font-size:14px}
-  .scope-ctl{grid-template-columns:repeat(3,auto)}
 }
 </style>
 </head>
@@ -798,168 +818,334 @@ function makeSeg(tab, key, opts, name) {
 }
 
 /* =====================================================================
-   Генератори Г3-112 і Г3-56/1
+   Дрібні елементи передніх панелей: тумблер, лампа, група, шкала, стрілочний прилад
+   ===================================================================== */
+function tumbler(on, click, title) {
+  const b = h('button', { class: 'tumb' + (on ? ' on' : ''), title, 'aria-label': title, 'aria-pressed': String(on) });
+  b.onclick = () => { click(); };
+  b.setOn = v => { b.classList.toggle('on', v); b.setAttribute('aria-pressed', String(v)); };
+  return b;
+}
+const lampEl = (cls = '') => h('span', { class: 'lamp ' + cls });
+const grp = (title, ...kids) => h('div', { class: 'grp' }, h('i', {}, title), h('div', { class: 'gk' }, ...kids));
+const vstack = (...kids) => h('div', { style: 'display:flex;flex-direction:column;gap:4px;align-items:center' }, ...kids);
+const capt = t => h('div', { class: 'kc', html: t });
+
+/* шкала-барабан частоти: рухома шкала під нерухомим візиром */
+function makeDialScale(T) {
+  const W = 300, H = 50, PX = 620;
+  const x = v => Math.log10(v / T.dmin) * PX;
+  const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'dial', role: 'img', 'aria-label': 'шкала частоти' });
+  const defs = sv('defs', {}, svg);
+  const lg = sv('linearGradient', { id: 'gDrum', x1: 0, y1: 0, x2: 1, y2: 0 }, defs);
+  [[0, 'rgba(0,0,0,.55)'], [0.18, 'rgba(0,0,0,0)'], [0.82, 'rgba(0,0,0,0)'], [1, 'rgba(0,0,0,.55)']].forEach(([o, c]) => sv('stop', { offset: o, 'stop-color': c }, lg));
+  sv('rect', { width: W, height: H, fill: '#efe7cf' }, svg);
+  const g = sv('g', {}, svg);
+  for (let v = T.dmin; v <= T.dmax * 1.0001; v += v < 2 * T.dmin ? T.dmin / 10 : v < 5 * T.dmin ? T.dmin / 5 : T.dmin / 2) {
+    const vv = +v.toPrecision(6), major = T.lab.includes(Math.round(vv)) && Math.abs(vv - Math.round(vv)) < 1e-6;
+    sv('line', { x1: x(vv), x2: x(vv), y1: 30, y2: major ? 14 : (Math.round(vv) % 5 === 0 && Math.abs(vv - Math.round(vv)) < 1e-6 ? 21 : 25), stroke: '#1d1d1b', 'stroke-width': major ? 1.4 : 0.8 }, g);
+    if (major) sv('text', { x: x(vv), y: 11, 'text-anchor': 'middle', style: 'font:bold 11px Arial,sans-serif', fill: '#1d1d1b', text: Math.round(vv) }, g);
+  }
+  sv('line', { x1: 0, x2: x(T.dmax), y1: 30.5, y2: 30.5, stroke: '#1d1d1b', 'stroke-width': 0.8 }, g);
+  const mt = sv('text', { x: 6, y: 44, style: 'font:10px Arial,sans-serif', fill: '#4a4436', text: '' }, svg);
+  const mr = sv('text', { x: W - 6, y: 44, 'text-anchor': 'end', style: 'font:10px Arial,sans-serif', fill: '#4a4436', text: 'Hz' }, svg);
+  sv('rect', { width: W, height: H, fill: 'url(#gDrum)' }, svg);
+  sv('line', { x1: W / 2, x2: W / 2, y1: 0, y2: H, stroke: '#c0180c', 'stroke-width': 1.5 }, svg);
+  sv('rect', { x: 0.5, y: 0.5, width: W - 1, height: H - 1, fill: 'none', stroke: '#3b3a35', 'stroke-width': 1, rx: 3 }, svg);
+  return { el: svg, set(d, m, ml) { g.setAttribute('transform', `translate(${W / 2 - x(d)},0)`); mt.textContent = 'множник ' + ml; mr.textContent = 'ν = ' + si(d * m, 'Hz', 4); } };
+}
+
+/* стрілочний вольтметр виходу (ефективне значення) */
+function makeMeter(max = 8) {
+  const W = 140, H = 84, cx = 70, cy = 78, R = 60, A = 48;
+  const svg = sv('svg', { viewBox: `0 0 ${W} ${H}`, class: 'meter', role: 'img', 'aria-label': 'вольтметр виходу' });
+  sv('rect', { x: 0.5, y: 0.5, width: W - 1, height: H - 1, rx: 4, fill: '#f4f0e2', stroke: '#3b3a35' }, svg);
+  const pt = (v, r) => { const a = (-A + v / max * 2 * A) * PI / 180; return [cx + r * Math.sin(a), cy - r * Math.cos(a)]; };
+  for (let v = 0; v <= max + 1e-9; v += 0.25) {
+    const mj = Math.abs(v - Math.round(v)) < 1e-9, [x1, y1] = pt(v, R), [x2, y2] = pt(v, R - (mj ? 8 : 4));
+    sv('line', { x1, y1, x2, y2, stroke: '#1d1d1b', 'stroke-width': mj ? 1.2 : 0.6 }, svg);
+    if (mj && Math.round(v) % 2 === 0) { const [tx, ty] = pt(v, R - 16); sv('text', { x: tx, y: ty + 3.5, 'text-anchor': 'middle', style: 'font:10px Arial,sans-serif', fill: '#1d1d1b', text: Math.round(v) }, svg); }
+  }
+  sv('path', { d: `M${pt(0, R + 2).join(',')} A${R + 2},${R + 2} 0 0 1 ${pt(max, R + 2).join(',')}`, fill: 'none', stroke: '#1d1d1b', 'stroke-width': 0.8 }, svg);
+  sv('text', { x: cx, y: cy - 22, 'text-anchor': 'middle', style: 'font:bold 12px Arial,sans-serif', fill: '#1d1d1b', text: 'V' }, svg);
+  sv('text', { x: 8, y: H - 6, style: 'font:8px Arial,sans-serif', fill: '#4a4436', text: 'U еф.' }, svg);
+  const nd = sv('g', { style: `transform-origin:${cx}px ${cy}px;transition:transform .45s cubic-bezier(.3,1.6,.5,1)` }, svg);
+  sv('line', { x1: cx, y1: cy, x2: cx, y2: cy - R + 2, stroke: '#111', 'stroke-width': 1.3 }, nd);
+  sv('circle', { cx, cy, r: 4.5, fill: '#2a2a28' }, svg);
+  return { el: svg, set(u) { nd.style.transform = `rotate(${-A + clamp(u / max, -0.02, 1.04) * 2 * A}deg)`; } };
+}
+
+/* =====================================================================
+   Генератори Г3-112 і Г3-56/1 (передня панель)
    ===================================================================== */
 function makeGenerator(host, tab, type) {
   const T = type === 'g56'
     ? { name: 'Г3-56/1', sub: 'генератор звуковий', dmin: 20, dmax: 200, lab: [20, 30, 40, 50, 70, 100, 150, 200], mults: [1, 10, 100, 1000] }
     : { name: 'Г3-112', sub: 'генератор сигналів низькочастотний', dmin: 10, dmax: 100, lab: [10, 15, 20, 30, 40, 50, 70, 100], mults: [1, 10, 100, 1000] };
   const st = tab.st;
+  tab.genOn = true;
   const split = nu => {
     let m = T.mults[0];
     for (const mm of T.mults) if (nu / mm >= T.dmin * 0.9999) m = mm;
     return { m, d: clamp(nu / m, T.dmin, T.dmax) };
   };
   let cur = split(st.nu);
+  const ATT = [0, 10, 20, 30, 40, 50, 60], af = a => 10 ** (-a / 20);
+  let att = 0, lvl = st.E0;
+  const setE = () => tab.set('E0', +(lvl * af(att)).toPrecision(4), 'gen');
   const ml = v => '×' + (v >= 1000 ? '10³' : v >= 100 ? '10²' : v);
+
   const fk = new Knob({ size: 92, min: T.dmin, max: T.dmax, log: true, value: cur.d, ticks: T.lab.map(v => ({ v })), minor: 50, title: 'частота',
     onChange: d => { cur.d = d; tab.set('nu', round3(d * cur.m), 'gen'); } });
-  const mk = new Knob({ size: 42, steps: T.mults, value: cur.m, a0: -70, a1: 70, ticks: T.mults.map(v => ({ v, l: ml(v) })), title: 'множник',
-    onChange: m => { cur.m = m; tab.set('nu', round3(cur.d * m), 'gen'); } });
-  const ak = new Knob({ size: 50, min: 0, max: 10, value: st.E0, ticks: [0, 2, 4, 6, 8, 10].map(v => ({ v })), minor: 20, title: 'амплітуда',
-    onChange: v => tab.set('E0', +v.toFixed(2), 'gen') });
-  const fval = h('div', { class: 'v' }), mval = h('div', { class: 'v' }), aval = h('div', { class: 'v' });
+  const ak = new Knob({ size: 52, min: 0, max: 10, value: lvl, ticks: [0, 2, 4, 6, 8, 10].map(v => ({ v })), minor: 20, title: 'регулятор виходу',
+    onChange: v => { lvl = +v.toFixed(3); setE(); } });
+  const tk = new Knob({ size: 44, steps: ATT, value: 0, a0: -120, a1: 120, ticks: ATT.map(v => ({ v })), title: 'ослаблення, дБ',
+    onChange: a => { att = a; setE(); } });
+  const rb = T.mults.map(m => {
+    const b = h('button', { class: 'btn-sov', title: 'множник ' + m }, ml(m));
+    b.onclick = () => { cur.m = m; tab.set('nu', round3(cur.d * m), 'gen'); };
+    return [b, m];
+  });
+  const lamp = lampEl();
+  const pw = tumbler(true, () => { tab.genOn = !tab.genOn; tab.dirty = true; tab.sync('gen'); }, 'мережа');
+  const scale = makeDialScale(T), meter = makeMeter(8);
+  const fval = h('div', { class: 'v' }), aval = h('div', { class: 'v' }), tval = h('div', { class: 'v' });
   const read = h('div', { class: 'gen-read' });
   const extra = [];
   if (type === 'g56') {
     const b5 = h('button', { class: 'btn-sov' }, '5 Ω'), b600 = h('button', { class: 'btn-sov' }, '600 Ω');
     b5.onclick = () => tab.set('Ri', 5, 'gen'); b600.onclick = () => tab.set('Ri', 600, 'gen');
     tab.syncers.push(() => { b5.classList.toggle('on', st.Ri === 5); b600.classList.toggle('on', st.Ri === 600); });
-    extra.push(h('div', { class: 'kn' }, h('div', { style: 'display:flex;gap:3px' }, b5, b600), h('div', { style: 'margin-top:4px' }, 'вих. опір'),
-      h('div', { class: 'hint', style: 'margin-top:4px' }, 'атенюатор 0 dB')));
+    extra.push(vstack(h('div', { style: 'display:flex;gap:3px' }, b5, b600), capt('вих. опір')));
   }
-  const panel = h('div', { class: 'panel', style: 'flex:0 1 auto' },
+  const panel = h('div', { class: 'panel gen', style: 'flex:1 1 560px' },
     h('div', { class: 'plate' }, h('b', {}, T.name), h('span', {}, T.sub)),
+    h('div', { class: 'gen-top' }, h('div', { class: 'dial-win' }, scale.el), meter.el),
     h('div', { class: 'prow-in' },
+      vstack(pw, capt('мережа'), lamp),
       knobBox(fk, 'частота, Hz', fval),
-      h('div', { style: 'display:flex;flex-direction:column;gap:10px;align-items:center' }, knobBox(mk, 'множник', mval)),
-      knobBox(ak, 'рег. виходу, V', aval),
+      vstack(h('div', { class: 'rbtns' }, rb.map(x => x[0])), capt('множник')),
+      knobBox(tk, 'ослаблення, dB', tval),
+      knobBox(ak, 'рег. виходу', aval),
       ...extra,
-      h('div', { class: 'kn', style: 'gap:6px' }, h('span', { class: 'lamp' }), 'мережа',
-        h('div', { class: 'terms', style: 'margin-top:8px' }, h('span', { class: 'term r' }), h('span', { class: 'term k' })), 'вихід')),
+      vstack(h('div', { class: 'terms' }, h('span', { class: 'term r' }), h('span', { class: 'term k' })), capt('вихід ⏚'))),
     h('div', { style: 'display:flex;justify-content:center;margin-top:8px' }, read),
     h('div', { class: 'dup' }, ...makeSlider(tab, 'nu', SPEC.nu, 'dup'), ...makeSlider(tab, 'E0', SPEC.E0, 'dup')));
   host.append(panel);
   tab.syncers.push(src => {
-    if (src !== 'gen') { cur = split(st.nu); fk.set(cur.d); mk.set(cur.m); }
-    ak.set(st.E0);
-    fval.textContent = nf(cur.d, 3); mval.textContent = ml(cur.m); aval.textContent = 'E_m = ' + nf(st.E0, 3);
-    read.textContent = `ν = ${si(st.nu, 'Гц', 4)}   E_m = ${nf(st.E0, 3)} В   R_i = ${nf(st.Ri, 3)} Ом`;
+    if (src !== 'gen') {
+      cur = split(st.nu); fk.set(cur.d);
+      if (Math.abs(lvl * af(att) - st.E0) > 1e-9 * Math.max(1, st.E0)) {
+        lvl = st.E0 / af(att);
+        if (lvl > 10) { att = 0; lvl = st.E0; }
+      }
+    }
+    ak.set(lvl); tk.set(att);
+    rb.forEach(([b, m]) => b.classList.toggle('on', m === cur.m));
+    const on = tab.genOn;
+    pw.setOn(on); lamp.classList.toggle('off', !on); read.classList.toggle('off', !on);
+    scale.set(cur.d, cur.m, ml(cur.m));
+    meter.set(on ? lvl / SQ2 : 0);
+    fval.textContent = nf(cur.d, 3); aval.textContent = nf(lvl, 3) + ' V'; tval.textContent = (att ? '−' : '') + att + ' dB';
+    read.textContent = on ? `ν = ${si(st.nu, 'Гц', 4)}   E_m = ${si(st.E0, 'В', 3)}   R_i = ${nf(st.Ri, 3)} Ом` : 'вимкнено';
   });
 }
 
 /* =====================================================================
-   Осцилограф С1-93 / С1-83
+   Осцилограф С1-93 / С1-83 (двоканальний, передня панель)
    ===================================================================== */
 const VDIV = [0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10];
 const TDIV = [1e-6, 2e-6, 5e-6, 1e-5, 2e-5, 5e-5, 1e-4, 2e-4, 5e-4, 1e-3, 2e-3, 5e-3, 1e-2, 2e-2];
 const fV = v => (v < 1 ? nf(v * 1000, 3) + ' mV' : nf(v, 3) + ' V');
 const fT = t => (t < 1e-3 ? nf(t * 1e6, 3) + ' µs' : nf(t * 1e3, 3) + ' ms');
 function makeScope(host, tab, o) {
-  const sc = tab.st.scope = { v: [0.5, 0.5], t: 2e-4, mode: 'yt', auto: true };
+  const sc = tab.st.scope = {
+    v: [0.5, 0.5], t: 2e-4, mode: 'yt', disp: 'both', auto: true,
+    on: true, onT: -1e9, bright: 0.75, focus: 0.5,
+    fine: [1, 1], pos: [0, 0], cpl: ['ac', 'ac'], hpos: 0, mag: false,
+    trig: { src: 0, slope: 1, lvl: 0, wait: false },
+  };
   const cv = h('canvas');
-  const k1 = new Knob({ size: 40, steps: VDIV, value: 0.5, minor: VDIV.length - 1, title: 'В/под канал 1', onChange: v => { sc.v[0] = v; sc.auto = false; syncUI(); } });
-  const k2 = new Knob({ size: 40, steps: VDIV, value: 0.5, minor: VDIV.length - 1, title: 'В/под канал 2', onChange: v => { sc.v[1] = v; sc.auto = false; syncUI(); } });
-  const kt = new Knob({ size: 40, steps: TDIV, value: 2e-4, minor: TDIV.length - 1, title: 'час/под', onChange: v => { sc.t = v; sc.auto = false; syncUI(); } });
-  const v1 = h('div', { class: 'v' }), v2 = h('div', { class: 'v' }), vt = h('div', { class: 'v' });
-  const bYT = h('button', { class: 'btn-sov' }, 'Y–t'), bXY = h('button', { class: 'btn-sov' }, 'X–Y'), bA = h('button', { class: 'btn-sov' }, 'авто');
-  bYT.onclick = () => { sc.mode = 'yt'; syncUI(); };
-  bXY.onclick = () => { sc.mode = 'xy'; syncUI(); };
-  bA.onclick = () => { sc.auto = !sc.auto; if (sc.auto && tab.res) autoRange(tab.res); syncUI(); };
+  const btns = [];
+  const sbtn = (label, isOn, click, title) => {
+    const b = h('button', { class: 'btn-sov', title: title || label, html: label });
+    b.onclick = () => { click(); syncUI(); };
+    btns.push([b, isOn]); return b;
+  };
+  const manual = () => { sc.auto = false; };
+  const small = (o2, title) => new Knob(Object.assign({ size: 28, title }, o2));
+  // промінь
+  const pw = tumbler(true, () => { sc.on = !sc.on; if (sc.on) sc.onT = performance.now(); syncUI(); }, 'мережа');
+  const kB = small({ min: 0, max: 1, value: sc.bright, minor: 10, onChange: v => { sc.bright = v; } }, 'яскравість');
+  const kF = small({ min: 0, max: 1, value: sc.focus, minor: 10, onChange: v => { sc.focus = v; } }, 'фокус');
+  // канали
+  const ch = [0, 1].map(k => {
+    const kV = new Knob({ size: 40, steps: VDIV, value: sc.v[k], minor: VDIV.length - 1, title: `В/под канал ${k + 1}`, onChange: v => { sc.v[k] = v; manual(); syncUI(); } });
+    const kFi = small({ min: 0, max: 1, value: 1, onChange: p => { sc.fine[k] = 1 + (1 - p) * 1.5; manual(); syncUI(); } }, `плавно, канал ${k + 1}`);
+    const kP = small({ min: -4, max: 4, value: 0, minor: 8, onChange: v => { sc.pos[k] = Math.abs(v) < 0.08 ? 0 : v; } }, `зміщення ↕, канал ${k + 1}`);
+    const lm = lampEl('off');
+    const cp = [['ac', '~', 'закритий вхід (змінна складова)'], ['gnd', '⏚', 'вхід заземлено'], ['dc', '≅', 'відкритий вхід']]
+      .map(([c, l, t]) => sbtn(l, () => sc.cpl[k] === c, () => { sc.cpl[k] = c; }, t));
+    const val = h('div', { class: 'v' });
+    return { kV, kFi, kP, lm, val, el: grp(`канал ${k ? 'II' : 'I'} · Y`,
+      knobBox(kV, 'V/под', val),
+      vstack(kFi.svg, capt('плавно'), h('span', { class: 'unc' }, lm, 'некал.')),
+      vstack(kP.svg, capt('↕')),
+      vstack(h('div', { class: 'rbtns h' }, cp), capt('вхід'))) };
+  });
+  // розгортка
+  const kt = new Knob({ size: 40, steps: TDIV, value: sc.t, minor: TDIV.length - 1, title: 'час/под', onChange: v => { sc.t = v; manual(); syncUI(); } });
+  const kH = small({ min: -5, max: 5, value: 0, minor: 10, onChange: v => { sc.hpos = Math.abs(v) < 0.1 ? 0 : v; } }, 'зміщення ↔');
+  const vt = h('div', { class: 'v' });
+  const bMag = sbtn('×10', () => sc.mag, () => { sc.mag = !sc.mag; }, 'розтяжка ×10');
+  // синхронізація
+  const kL = small({ min: -4, max: 4, value: 0, minor: 8, onChange: v => { sc.trig.lvl = Math.abs(v) < 0.08 ? 0 : v; } }, 'рівень синхронізації');
+  const tLamp = lampEl('g');
+  const trSrc = [0, 1].map(k => sbtn(k ? 'II' : 'I', () => sc.trig.src === k, () => { sc.trig.src = k; }, 'джерело синхронізації'));
+  const trSl = [[1, '+'], [-1, '−']].map(([s, l]) => sbtn(l, () => sc.trig.slope === s, () => { sc.trig.slope = s; }, s > 0 ? 'за фронтом' : 'за спадом'));
+  const trMd = [[false, 'авт'], [true, 'чек']].map(([w, l]) => sbtn(l, () => sc.trig.wait === w, () => { sc.trig.wait = w; }, w ? 'чекаюча розгортка' : 'автоколивальна розгортка'));
+  // режим
+  const md = [['1', 'I'], ['2', 'II'], ['both', 'I і II']].map(([d, l]) => sbtn(l, () => sc.mode === 'yt' && sc.disp === d, () => { sc.mode = 'yt'; sc.disp = d; }));
+  const bXY = sbtn('X–Y', () => sc.mode === 'xy', () => { sc.mode = 'xy'; });
+  const bA = sbtn('автовст.', () => sc.auto, () => { sc.auto = !sc.auto; if (sc.auto && tab.res) autoRange(tab.res); }, 'автоматичне встановлення В/под і час/под');
+
   function syncUI() {
-    k1.set(sc.v[0]); k2.set(sc.v[1]); kt.set(sc.t);
-    v1.textContent = fV(sc.v[0]) + '/под'; v2.textContent = fV(sc.v[1]) + '/под'; vt.textContent = fT(sc.t) + '/под';
-    bYT.classList.toggle('on', sc.mode === 'yt'); bXY.classList.toggle('on', sc.mode === 'xy'); bA.classList.toggle('on', sc.auto);
+    ch.forEach((c, k) => {
+      c.kV.set(sc.v[k]); c.kFi.set(1 - (sc.fine[k] - 1) / 1.5); c.kP.set(sc.pos[k]);
+      c.lm.classList.toggle('off', sc.fine[k] < 1.001);
+      c.val.textContent = (sc.fine[k] > 1.001 ? '>' : '') + fV(sc.v[k]);
+    });
+    kt.set(sc.t); vt.textContent = fT(sc.t / (sc.mag ? 10 : 1));
+    kB.set(sc.bright); kF.set(sc.focus); kH.set(sc.hpos); kL.set(sc.trig.lvl);
+    pw.setOn(sc.on); pLamp.classList.toggle('off', !sc.on);
+    for (const [b, f] of btns) b.classList.toggle('on', !!f());
   }
   function autoRange(res) {
-    o.chans.forEach((ch, k) => { const A = abs(ch.get(res)); sc.v[k] = VDIV.find(v => A / v <= 3.6) || 10; });
+    o.chans.forEach((c, k) => { const A = abs(c.get(res)); sc.v[k] = VDIV.find(v => A / v <= 3.6) || 10; });
+    sc.fine = [1, 1];
     if (sc.mode === 'xy') { const v = Math.max(sc.v[0], sc.v[1]); sc.v = [v, v]; }
     sc.t = TDIV.find(t => 10 * t * res.nu >= 2) || TDIV[TDIV.length - 1];
   }
-  const panel = h('div', { class: 'panel', style: 'flex:1 1 520px' },
-    h('div', { class: 'plate' }, h('b', {}, o.name), h('span', {}, 'осцилограф універсальний')),
+  const pLamp = lampEl();
+  const panel = h('div', { class: 'panel scope', style: 'flex:1 1 100%' },
+    h('div', { class: 'plate' }, h('b', {}, o.name), h('span', {}, 'осцилограф універсальний двоканальний')),
     h('div', { class: 'scope-body' },
-      h('div', { class: 'scope-screen' }, h('div', { class: 'screen' }, cv)),
-      h('div', {},
-        h('div', { class: 'scope-ctl' },
-          knobBox(k1, 'V/под I', v1), knobBox(k2, 'V/под II', v2), knobBox(kt, 'час/под', vt)),
-        h('div', { style: 'display:flex;gap:5px;margin-top:10px;flex-wrap:wrap;align-items:center' }, bYT, bXY, bA),
-        h('div', { class: 'hint', style: 'margin-top:8px;max-width:250px', html: o.note || '' }))));
+      h('div', { class: 'scope-screen' }, h('div', { class: 'screen' }, cv),
+        h('div', { class: 'scope-under' },
+          grp('промінь', vstack(pw, capt('мережа'), pLamp), vstack(kB.svg, capt('яскр.')), vstack(kF.svg, capt('фокус'))))),
+      h('div', { class: 'scope-ctl' },
+        ch[0].el, ch[1].el,
+        grp('розгортка · X', knobBox(kt, 'час/под', vt), vstack(kH.svg, capt('↔')), vstack(bMag, capt('розтяжка'))),
+        grp('синхронізація',
+          vstack(kL.svg, capt('рівень')),
+          vstack(h('div', { class: 'rbtns h' }, trSrc), capt('джерело')),
+          vstack(h('div', { class: 'rbtns h' }, trSl), capt('полярн.')),
+          vstack(h('div', { class: 'rbtns h' }, trMd), h('span', { class: 'unc' }, tLamp, 'синхр.'))),
+        grp('режим', h('div', { class: 'rbtns h' }, md, bXY), bA),
+        h('div', { class: 'hint', style: 'max-width:360px', html: (o.note || '') + ' Ручка «плавно» не в крайньому правому положенні — канал некалібрований (горить «некал.»), тоді показ В/под неточний.' }))));
   host.append(panel);
   tab.onRes.push(res => { if (sc.auto) autoRange(res); syncUI(); });
   syncUI();
-  let lastW = 0;
+  let lastW = 0, trigShown = null;
   return {
     draw(res, theta) {
       const w = cv.clientWidth; if (!w || !res) return;
       const H = Math.round(w * 0.8), dpr = window.devicePixelRatio || 1;
       if (w !== lastW) { cv.width = Math.round(w * dpr); cv.height = Math.round(H * dpr); cv.style.height = H + 'px'; lastW = w; }
       const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const now = performance.now();
+      const warm = sc.on ? clamp((now - sc.onT) / 1400, 0, 1) : 0;
       const gr = ctx.createRadialGradient(w / 2, H / 2, 10, w / 2, H / 2, w * 0.7);
-      gr.addColorStop(0, '#0e2612'); gr.addColorStop(1, '#030904');
+      gr.addColorStop(0, sc.on ? '#0e2612' : '#060b07'); gr.addColorStop(1, '#030904');
       ctx.fillStyle = gr; ctx.fillRect(0, 0, w, H);
       const dx = w / 10, dy = H / 8;
-      ctx.strokeStyle = 'rgba(130,255,160,.17)'; ctx.lineWidth = 1;
+      const ga = sc.on ? 1 : 0.35;
+      ctx.strokeStyle = `rgba(130,255,160,${0.17 * ga})`; ctx.lineWidth = 1;
       ctx.beginPath();
       for (let i = 1; i < 10; i++) { ctx.moveTo(i * dx + 0.5, 0); ctx.lineTo(i * dx + 0.5, H); }
       for (let j = 1; j < 8; j++) { ctx.moveTo(0, j * dy + 0.5); ctx.lineTo(w, j * dy + 0.5); }
       ctx.stroke();
-      ctx.strokeStyle = 'rgba(130,255,160,.32)'; ctx.beginPath();
+      ctx.strokeStyle = `rgba(130,255,160,${0.32 * ga})`; ctx.beginPath();
       for (let i = 0; i <= 50; i++) { const x = i * dx / 5; ctx.moveTo(x, H / 2 - 3); ctx.lineTo(x, H / 2 + 3); }
       for (let j = 0; j <= 40; j++) { const y = j * dy / 5; ctx.moveTo(w / 2 - 3, y); ctx.lineTo(w / 2 + 3, y); }
       ctx.stroke();
-      const z = o.chans.map(ch => ch.get(res));
+      const setTrig = v => { if (v !== trigShown) { trigShown = v; tLamp.classList.toggle('off', !v); } };
+      if (!sc.on || warm <= 0) { setTrig(false); return; }
+
+      const gen = tab.genOn === false ? 0 : 1;
+      const z = o.chans.map((c, k) => (sc.cpl[k] === 'gnd' ? Cx(0) : scl(c.get(res), gen)));
+      const vd = k => sc.v[k] * sc.fine[k];
+      const I = sc.bright * warm, df = Math.abs(sc.focus - 0.5) * 2;
       const nz = G.noise ? 0.025 : 0;
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; ctx.lineJoin = 'round';
       const beam = (col, fn) => {
-        for (const [lw, al, bl] of [[4, 0.18, 10], [1.6, 0.95, 4]]) {
-          ctx.strokeStyle = col; ctx.globalAlpha = al; ctx.lineWidth = lw; ctx.shadowColor = col; ctx.shadowBlur = bl;
+        for (const [lw, al, bl] of [[4 + df * 9, 0.2 * I, 10 + df * 16], [1.6 + df * 5, I * (1 - 0.6 * df), 4 + df * 10]]) {
+          ctx.strokeStyle = col; ctx.globalAlpha = clamp(al, 0, 1); ctx.lineWidth = lw; ctx.shadowColor = col; ctx.shadowBlur = bl;
           ctx.beginPath(); fn(); ctx.stroke();
         }
         ctx.globalAlpha = 1; ctx.shadowBlur = 0;
       };
       const col = ['#9dffb4', '#e2ff9a'];
-      const w0 = TAU * res.nu;
+      const w0 = TAU * res.nu, Tp = 1 / res.nu;
       if (sc.mode === 'yt') {
-        const span = 10 * sc.t, cycles = span * res.nu;
-        const ph1 = arg(z[0]), Tp = 1 / res.nu;
-        let t0 = ((-PI / 2 - ph1) / w0) % Tp; if (t0 < 0) t0 += Tp;
-        z.forEach((zz, k) => {
-          const A = abs(zz) / sc.v[k] * dy, a = arg(zz);
+        const span0 = 10 * sc.t, span = span0 / (sc.mag ? 10 : 1), cycles = span * res.nu;
+        const tOf = x => span0 / 2 + (x - w / 2 - sc.hpos * dx) / w * span;
+        const s = sc.trig.src, As = abs(z[s]) / vd(s), L = sc.trig.lvl;
+        const trig = As > 1e-6 && Math.abs(L) < As;
+        setTrig(trig);
+        let t0;
+        if (trig) t0 = (-sc.trig.slope * Math.acos(L / As) - arg(z[s])) / w0;
+        else t0 = (now / 1000) * 0.55 * Tp;
+        t0 %= Tp; if (t0 < 0) t0 += Tp;
+        const show = sc.disp === 'both' ? [0, 1] : [+sc.disp - 1];
+        if (!trig && sc.trig.wait) { /* чекаюча розгортка без запуску: променя немає */ }
+        else show.forEach(k => {
+          const A = abs(z[k]) / vd(k) * dy, a = arg(z[k]), yc = H / 2 - sc.pos[k] * dy;
+          const xa = Math.max(0, w / 2 + sc.hpos * dx - w / 2 * (sc.mag ? 10 : 1)), xb = Math.min(w, w / 2 + sc.hpos * dx + w / 2 * (sc.mag ? 10 : 1));
+          if (xb <= xa) return;
           if (cycles > 140) {
-            ctx.fillStyle = col[k]; ctx.globalAlpha = 0.35; ctx.fillRect(0, H / 2 - A, w, 2 * A); ctx.globalAlpha = 1;
+            ctx.fillStyle = col[k]; ctx.globalAlpha = 0.35 * I; ctx.fillRect(xa, yc - A - 1, xb - xa, 2 * A + 2); ctx.globalAlpha = 1;
           } else {
             const N = Math.min(1400, Math.max(300, Math.round(cycles * 40)));
             beam(col[k], () => {
               for (let i = 0; i <= N; i++) {
-                const t = i / N * span, y = H / 2 - A * Math.cos(w0 * (t + t0) + a) - nz * dy * gauss();
-                if (i) ctx.lineTo(i / N * w, y); else ctx.moveTo(0, y);
+                const x = xa + i / N * (xb - xa), t = tOf(x), y = yc - A * Math.cos(w0 * (t + t0) + a) - nz * dy * gauss();
+                if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
               }
             });
           }
-          ctx.fillStyle = col[k]; ctx.font = '11px ui-monospace,monospace'; ctx.fillText(String(k + 1), 4, clamp(H / 2 - A * Math.cos(w0 * t0 + a) - 6, 10, H - 4));
+          ctx.fillStyle = col[k]; ctx.globalAlpha = I; ctx.font = '11px ui-monospace,monospace';
+          ctx.fillText(k ? 'II' : 'I', xa + 4, clamp(yc - A * Math.cos(w0 * (tOf(xa) + t0) + a) - 6, 10, H - 4)); ctx.globalAlpha = 1;
         });
+        // мітка рівня синхронізації
+        const yL = H / 2 - sc.pos[s] * dy - L * dy;
+        ctx.fillStyle = 'rgba(255,190,90,.8)'; ctx.globalCompositeOperation = 'source-over';
+        ctx.beginPath(); ctx.moveTo(w, yL); ctx.lineTo(w - 8, yL - 5); ctx.lineTo(w - 8, yL + 5); ctx.closePath(); ctx.fill();
       } else {
+        setTrig(true);
         const ax = o.xy.x, ay = o.xy.y;
-        const Ax = abs(z[ax]) / sc.v[ax] * dx, Ay = abs(z[ay]) / sc.v[ay] * dy, px = arg(z[ax]), py = arg(z[ay]);
+        const Ax = abs(z[ax]) / vd(ax) * dx, Ay = abs(z[ay]) / vd(ay) * dy, px = arg(z[ax]), py = arg(z[ay]);
+        const cx0 = w / 2 + sc.hpos * dx, cy0 = H / 2 - sc.pos[ay] * dy;
         beam(col[0], () => {
           for (let i = 0; i <= 260; i++) {
-            const t = i / 260 * TAU, x = w / 2 + Ax * Math.cos(t + px) + nz * dx * gauss(), y = H / 2 - Ay * Math.cos(t + py) + nz * dy * gauss();
+            const t = i / 260 * TAU, x = cx0 + Ax * Math.cos(t + px) + nz * dx * gauss(), y = cy0 - Ay * Math.cos(t + py) + nz * dy * gauss();
             if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
           }
           ctx.closePath();
         });
-        const x = w / 2 + Ax * Math.cos(theta + px), y = H / 2 - Ay * Math.cos(theta + py);
-        ctx.fillStyle = '#eaffef'; ctx.shadowColor = '#7dff9a'; ctx.shadowBlur = 14;
-        ctx.beginPath(); ctx.arc(x, y, 3, 0, TAU); ctx.fill(); ctx.shadowBlur = 0;
+        const x = cx0 + Ax * Math.cos(theta + px), y = cy0 - Ay * Math.cos(theta + py);
+        ctx.fillStyle = '#eaffef'; ctx.shadowColor = '#7dff9a'; ctx.shadowBlur = 14; ctx.globalAlpha = I;
+        ctx.beginPath(); ctx.arc(x, y, 3, 0, TAU); ctx.fill(); ctx.shadowBlur = 0; ctx.globalAlpha = 1;
       }
       ctx.restore();
       ctx.fillStyle = 'rgba(160,255,180,.85)'; ctx.font = '10.5px ui-monospace,Consolas,monospace';
+      const cl = k => (sc.cpl[k] === 'gnd' ? '⏚' : sc.cpl[k] === 'ac' ? '~' : '≅') + (sc.fine[k] > 1.001 ? '>' : '');
       const lab = sc.mode === 'yt'
-        ? `I: ${fV(sc.v[0])}  II: ${fV(sc.v[1])}  ${fT(sc.t)}/под`
+        ? `I${cl(0)} ${fV(sc.v[0])}  II${cl(1)} ${fV(sc.v[1])}  ${fT(sc.t / (sc.mag ? 10 : 1))}/под${sc.mag ? ' ×10' : ''}`
         : `X(${o.xy.x === 0 ? 'I' : 'II'}): ${fV(sc.v[o.xy.x])}  Y(${o.xy.y === 0 ? 'I' : 'II'}): ${fV(sc.v[o.xy.y])}  X–Y`;
       ctx.fillText(lab, 5, H - 6);
       ctx.textAlign = 'right'; ctx.fillText(o.chans.map((c, k) => `${k ? 'II' : 'I'}: ${c.name.replace('_', '')}`).join('  '), w - 5, 12); ctx.textAlign = 'left';
+      if (gen === 0) { ctx.fillStyle = 'rgba(255,190,90,.85)'; ctx.fillText('генератор вимкнено', 5, 12); }
     }
   };
 }
@@ -1011,7 +1197,7 @@ function makeVoltmeter(host, tab, o) {
   return {
     update(res, now, force) {
       if (!force && now - last < 350) return; last = now;
-      const U = abs(o.get(res, tab.st.vm)) / SQ2;
+      const U = (tab.genOn === false ? 0 : 1) * abs(o.get(res, tab.st.vm)) / SQ2;
       show(Math.max(0, noisy(U, 0.0015, 2e-5)));
     }
   };
